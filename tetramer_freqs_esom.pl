@@ -11,13 +11,14 @@
 
 =head1 OPTIONS
 	
-	-f		Required	Fasta File, may include X:s and N:s
-	-a		Required	Annotation File (3 columns; 1. full contig name, 2.annotation, 3.Class Number (Your metagenome has class#0, everything else 1+))
-	-k		Optional	default=4;	any reasonable k-mer size; ideally don't change this but if you do keep it between 3-6.
-	-min	Optional	default=2500; Minimal length (in nt) of input contig to be included in output
-	-max	Optional	default=5000
-	Note:	The script will split sequence after each 'max' nt; join last part, if remaining seq shorter than 'max', with second-last part
-			eg: in default settings, a sequence of 14 kb will be split into a 5 kb and a 9 kb fragment if window_size = 5 kb.
+	-f			Required	Fasta File, may include X:s and N:s
+	-a			Required	Annotation File (3 columns; 1. full contig name, 2.annotation, 3.Class Number (Your metagenome has class#0, everything else 1+))
+	-makeclass 	Optional	default=F; if T the annotations in the second column of the annotation file will automatically be converted to numbers. The third column will be ignored (and is not needed).    
+	-k			Optional	default=4;any reasonable k-mer size; ideally don't change this but if you do keep it between 3-6.
+	-min		Optional	default=2500; Minimal length (in nt) of input contig to be included in output
+	-max		Optional	default=5000
+	Note:		The script will split sequence after each 'max' nt; join last part, if remaining seq shorter than 'max', with second-last part
+				eg: in default settings, a sequence of 14 kb will be split into a 5 kb and a 9 kb fragment if window_size = 5 kb.
 
 =head1 AUTHORS
 
@@ -27,6 +28,7 @@
 
 	# Itai Sharon, Nov/2010
 	# Sunit Jain, 2010 (sunitj [AT] umich [DOT] edu)
+	# Anders Andersson, 2013 (anders.andersson@scilifelab.se)
 		
 =head1 CITATION
 
@@ -58,10 +60,12 @@ my $window_size = 5000; #split sequence after each window_size nt,
                      #9 kb fragment if window_size = 5 kb)
 my $ext="fasta";
 my $kmer_size 		= 4;
+my $convert_annotations_to_classes = "F";
 
 GetOptions(
 	'f|fasta=s'=> \$sfile,
 	'a|ann=s'=>\$annotationfile,
+	'makeclass|ann=s'=>\$convert_annotations_to_classes,
 	'min:i'=>\$min_length,
 	'max:i'=>\$window_size,
 	'k|kmer:i'=>\$kmer_size,
@@ -73,6 +77,9 @@ GetOptions(
 &licensing;
 
 if ((! $sfile) || (! $annotationfile)){print "[ERROR $0] Missing required input.\nFor help using the script, type 'perl $0 -help'\n"; exit;}
+if ($convert_annotations_to_classes ne "F") {
+	if ($convert_annotations_to_classes ne "T") {print "[ERROR $0] -makeclass should either be T or F (or not specified).\nFor help using the script, type 'perl $0 -help'\n"; exit;}
+}	
 
 print "\n#################### ".$kmer_size."-mer Frequencies #####################\n";
 print "Minimum length (in bases) of input contig to be included in output:\n";
@@ -283,18 +290,29 @@ sub make_names_file {
 }
 ################################################################################################################
 sub make_class_file {
-    	print  "printing class file $classfile ... ";
+    print  "printing class file $classfile ... ";
 	my %class = ();
+	my %annotation = ();	
 	my $line = 0;
-
+	my $class = 0;
+	
 	open (INFILE, $annotationfile) || die "can't open $annotationfile";
 	while (<INFILE>) {
     	$line++;
 		chomp;
-		# contig	annotation
+		# contig annotation
 		my @fields = split(/\t/, $_);
 		$fields[0] =~ s/\s+$//;
-		$class{$fields[0]} = $fields[2];
+		if ($convert_annotations_to_classes eq "T") {
+	    	if (!defined $annotation{$fields[1]}) {
+				$class++;
+				$annotation{$fields[1]} = $class;
+	    	}
+            $class{$fields[0]} = $annotation{$fields[1]}."\t".$fields[1];
+		} else {
+	    	$class{$fields[0]} = $fields[2];
+	    	#print"#$fields[0]#$fields[2]#\n";
+		}
 	}
    	close (INFILE);
 
